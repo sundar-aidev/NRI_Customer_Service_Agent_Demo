@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.DS_Store
+.idea/
+.vscode/
+.superpowers/
+.pytest_cache/
+.coverage
+htmlcov/
+
+.venv/
+venv/
+env/
+
+.env
+.env.*
+!.env.example
+
+# Authentication material must never enter Git.
+auth.json
+.codex/
+data/
+
+*.log
+audit-*/

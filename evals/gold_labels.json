@@ -1,0 +1,91 @@
+[
+  {
+    "id": "l1_warranty_category",
+    "expected_intents": ["warranty_terms"],
+    "expected_requirements": ["K"],
+    "expected_knowledge_ids": ["KB-WAR-01"],
+    "expected_record_ids": [],
+    "expected_decisions": {},
+    "requires_human": false,
+    "required_answer_facts": ["24-month", "normal use", "misuse"]
+  },
+  {
+    "id": "l2_stock_check",
+    "expected_intents": ["stock_availability"],
+    "expected_requirements": ["T"],
+    "expected_knowledge_ids": [],
+    "expected_record_ids": ["SKU-AER500"],
+    "expected_decisions": {
+      "stock_availability": "out_of_stock"
+    },
+    "requires_human": false,
+    "required_answer_facts": ["out of stock", "no confirmed restock"]
+  },
+  {
+    "id": "l3_return_eligible_join",
+    "expected_intents": ["return_eligibility"],
+    "expected_requirements": ["K", "T"],
+    "expected_knowledge_ids": ["KB-RET-01"],
+    "expected_record_ids": ["ORD-10023998"],
+    "expected_decisions": {
+      "return_eligibility": "eligible"
+    },
+    "requires_human": true,
+    "required_answer_facts": ["delivered yesterday", "30-day", "delivery date"]
+  },
+  {
+    "id": "l4_partial_refund_proration",
+    "expected_intents": ["partial_refund", "coupon_proration"],
+    "expected_requirements": ["K", "T", "C"],
+    "expected_knowledge_ids": ["KB-REF-01"],
+    "expected_record_ids": ["ORD-10024090"],
+    "expected_decisions": {
+      "refund_amount": "8000"
+    },
+    "requires_human": true,
+    "required_answer_facts": ["SGD 80.00", "SGD 20.00", "SGD 8.00", "not refunded"]
+  },
+  {
+    "id": "l5_nri_sample",
+    "expected_intents": [
+      "defect_return",
+      "remedy_ownership",
+      "replacement",
+      "refund_composition",
+      "goodwill_compensation"
+    ],
+    "expected_requirements": ["K", "T", "C", "D"],
+    "expected_knowledge_ids": [
+      "KB-RET-01",
+      "KB-MKT-01",
+      "KB-PRE-01",
+      "KB-REF-01",
+      "KB-PTS-01",
+      "KB-GDW-01",
+      "KB-STK-01"
+    ],
+    "expected_record_ids": [
+      "ORD-10024120",
+      "SKU-AER500",
+      "PTS-LEDGER-C8891",
+      "HIST-C8891"
+    ],
+    "expected_decisions": {
+      "D1_return_eligibility": "UNDEFINED",
+      "D2_remedy_ownership": "human_review",
+      "D3_replacement_remedy": "not_feasible",
+      "D4_refund_composition": "UNDEFINED",
+      "D5_goodwill": "gated_human_approval"
+    },
+    "requires_human": true,
+    "required_answer_facts": [
+      "order and photos verified",
+      "out of stock",
+      "refund",
+      "comparable in-stock",
+      "exact refund breakdown",
+      "compensation",
+      "review"
+    ]
+  }
+]

@@ -1,0 +1,76 @@
+[
+  {
+    "id": "l1_warranty_category",
+    "rung": "L1",
+    "title": "Warranty duration, small appliances",
+    "query": "What's the warranty on small kitchen appliances—one year or two?",
+    "channel": "marketplace_chat",
+    "locale": "en-SG",
+    "conversation_context": {},
+    "attachments": []
+  },
+  {
+    "id": "l2_stock_check",
+    "rung": "L2",
+    "title": "Stock check, Aeromix 500 blender",
+    "query": "Is the Aeromix 500 blender back in stock?",
+    "channel": "marketplace_chat",
+    "locale": "en-SG",
+    "conversation_context": {
+      "region": "SG"
+    },
+    "attachments": []
+  },
+  {
+    "id": "l3_return_eligible_join",
+    "rung": "L3",
+    "title": "Return eligibility, delivered yesterday",
+    "query": "Can I still return this? It arrived yesterday.",
+    "channel": "marketplace_chat",
+    "locale": "en-SG",
+    "conversation_context": {
+      "customer_id": "C2266",
+      "active_order_id": "ORD-10023998"
+    },
+    "attachments": []
+  },
+  {
+    "id": "l4_partial_refund_proration",
+    "rung": "L4",
+    "title": "Partial return with coupon",
+    "query": "I'm returning the SGD 100 wireless earbuds from my two-item order. I used a 20% coupon—how much do I get back?",
+    "channel": "marketplace_chat",
+    "locale": "en-SG",
+    "conversation_context": {
+      "customer_id": "C6612",
+      "active_order_id": "ORD-10024090"
+    },
+    "attachments": []
+  },
+  {
+    "id": "l5_nri_sample",
+    "rung": "L5",
+    "title": "Damaged sale item, five-part request",
+    "query": "The product I received yesterday was damaged, and I've attached photos. It was purchased during a sale. Can I still return it? I used both a coupon and loyalty points. I would like the same product to be sent immediately. In addition to a refund, I would also like a compensation coupon.",
+    "channel": "marketplace_chat",
+    "locale": "en-SG",
+    "conversation_context": {
+      "customer_id": "C8891",
+      "active_order_id": "ORD-10024120"
+    },
+    "attachments": [
+      {
+        "id": "ATT-24120-FRONT",
+        "filename": "damage-front.jpg",
+        "certainty": "human_verified",
+        "observation": "Visible damage on the front of the delivered product"
+      },
+      {
+        "id": "ATT-24120-SIDE",
+        "filename": "damage-side.jpg",
+        "certainty": "human_verified",
+        "observation": "Visible damage on the side of the delivered product"
+      }
+    ]
+  }
+]

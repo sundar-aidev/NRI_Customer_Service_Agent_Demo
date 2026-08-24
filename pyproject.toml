@@ -1,0 +1,9 @@
+[project]
+name = "nri-customer-service-agent-demo"
+version = "1.0.0"
+description = "A five-case, evidence-grounded customer-service agent evaluation demo"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

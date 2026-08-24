@@ -1,0 +1,19 @@
+{
+  "_note": "Source map for the Company A knowledge pack used by Eval Bench. Illustrative corpus for the NRI case exercise, not a reconstruction of any real company's documents. Every entry carries a provenance stamp: BRIEF (stated in the case brief), DERIVED (implied by the brief), SYNTHETIC (authored so a case can run).",
+  "_kind_note": "Entries are ordered by `kind`, the pack's filing axis: the business subject a support agent searches for. Sections 1-5 (returns_refunds, defects_warranties, marketplace, fulfilment_remedies, goodwill) are live customer policy filed by subject; open_decisions is the governance register; archive is inactive policy kept so version selection is testable. One document, one home: a document with a governance gap still lives under its subject (KB-PTS-01 is filed under returns_refunds) and the open-decisions register indexes it from there. Only KB-PRE-01, a precedence question with no subject home, lives in open_decisions. The canonical order, the heading and the blurb for each section live in knowledge/retriever.py (KIND_ORDER, KIND_HEADING, KIND_BLURB); `kind` is descriptive metadata and never affects retrieval, decisions or scoring.",
+  "pack": "company-a-illustrative",
+  "generated_for": "NRI written case exercise - Enhancing E-commerce Customer Service",
+  "gap_register": "kb_content_gaps.md",
+  "kind_order": ["returns_refunds", "defects_warranties", "marketplace", "fulfilment_remedies", "goodwill", "open_decisions", "archive"],
+  "documents": [
+    {"id": "KB-RET-01", "file": "docs/KB-RET-01.md", "kind": "returns_refunds",     "status": "current",    "provenance": "SYNTHETIC"},
+    {"id": "KB-REF-01", "file": "docs/KB-REF-01.md", "kind": "returns_refunds",     "status": "current",    "provenance": "SYNTHETIC"},
+    {"id": "KB-PTS-01", "file": "docs/KB-PTS-01.md", "kind": "returns_refunds",     "status": "incomplete", "provenance": "DERIVED"},
+    {"id": "KB-WAR-01", "file": "docs/KB-WAR-01.md", "kind": "defects_warranties",  "status": "current",    "provenance": "SYNTHETIC"},
+    {"id": "KB-MKT-01", "file": "docs/KB-MKT-01.md", "kind": "marketplace",         "status": "current",    "provenance": "BRIEF"},
+    {"id": "KB-STK-01", "file": "docs/KB-STK-01.md", "kind": "fulfilment_remedies", "status": "current",    "provenance": "DERIVED"},
+    {"id": "KB-GDW-01", "file": "docs/KB-GDW-01.md", "kind": "goodwill",            "status": "current",    "provenance": "DERIVED"},
+    {"id": "KB-PRE-01", "file": "docs/KB-PRE-01.md", "kind": "open_decisions",      "status": "undefined",  "provenance": "BRIEF"},
+    {"id": "KB-RET-00", "file": "docs/KB-RET-00.md", "kind": "archive",             "status": "retired",    "provenance": "SYNTHETIC"}
+  ]
+}
