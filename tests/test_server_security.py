@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import inspect
+import os
 import unittest
+from unittest.mock import patch
 
 from serve import (
     Handler,
@@ -46,6 +48,26 @@ class ServerSecurityTest(unittest.TestCase):
         self.assertEqual(validate_content_length("10", 100), 10)
         with self.assertRaises(PayloadTooLarge):
             validate_content_length("101", 100)
+
+    def test_hosted_password_minimum_is_six_characters(self) -> None:
+        environment = {
+            "NRI_REQUIRE_AUTH": "true",
+            "NRI_DEMO_USERNAME": "reviewer",
+            "NRI_DEMO_PASSWORD": "sixsix",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            settings = Settings.from_environment("0.0.0.0", 8080)
+        self.assertEqual(settings.password, "sixsix")
+
+    def test_hosted_password_shorter_than_six_is_rejected(self) -> None:
+        environment = {
+            "NRI_REQUIRE_AUTH": "true",
+            "NRI_DEMO_USERNAME": "reviewer",
+            "NRI_DEMO_PASSWORD": "short",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            with self.assertRaisesRegex(ValueError, "at least 6 characters"):
+                Settings.from_environment("0.0.0.0", 8080)
 
 
 if __name__ == "__main__":

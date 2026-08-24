@@ -6,7 +6,7 @@ This profile is for a short-lived, access-controlled demonstration using one Cha
 
 1. Access to the Railway workspace and the target project/environment.
 2. Permission for Railway to read the GitHub repository.
-3. A reviewer username and a unique password of at least 12 characters.
+3. A reviewer username and a demo password of at least 6 characters.
 4. The Codex OAuth cache entered directly into Railway as a sealed variable.
 5. A single Railway volume mounted at `/data`.
 6. Approval to create one public Railway domain after the service is healthy.
@@ -18,7 +18,7 @@ Do not send the OAuth cache, password, or Railway token through chat or commit t
 | Variable | Required | Description |
 |---|---:|---|
 | `NRI_DEMO_USERNAME` | Yes | Shared reviewer username |
-| `NRI_DEMO_PASSWORD` | Yes | Long, unique reviewer password |
+| `NRI_DEMO_PASSWORD` | Yes | Reviewer password; minimum 6 characters |
 | `NRI_REQUIRE_AUTH` | Yes | Set to `true` |
 | `CODEX_AUTH_JSON_B64` | First boot | Base64-encoded Codex `auth.json`; seal this variable |
 | `NRI_STATE_ROOT` | No | Defaults to `/data`, the documented volume mount |

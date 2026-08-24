@@ -107,8 +107,8 @@ class Settings:
             raise ValueError(
                 "NRI_DEMO_USERNAME and NRI_DEMO_PASSWORD are required for a non-local server"
             )
-        if auth_required and password is not None and len(password) < 12:
-            raise ValueError("NRI_DEMO_PASSWORD must contain at least 12 characters")
+        if auth_required and password is not None and len(password) < 6:
+            raise ValueError("NRI_DEMO_PASSWORD must contain at least 6 characters")
         return cls(
             host=host,
             port=port,
