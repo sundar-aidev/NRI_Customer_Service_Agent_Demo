@@ -23,7 +23,7 @@ Do not send the OAuth cache, password, or Railway token through chat or commit t
 | `CODEX_AUTH_JSON_B64` | First boot | Base64-encoded Codex `auth.json`; seal this variable |
 | `NRI_STATE_ROOT` | No | Defaults to `/data`, the documented volume mount |
 | `NRI_CODEX_MODEL` | No | Leave empty to use the subscription default |
-| `NRI_MODEL_TIMEOUT` | No | Defaults to `180` seconds |
+| `NRI_MODEL_TIMEOUT` | No | Defaults to `300` seconds |
 | `NRI_RUN_WORKERS` | No | Defaults to `2` |
 | `NRI_RUN_LIMIT` | No | Defaults to `60` runs per reviewer IP per hour |
 

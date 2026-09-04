@@ -1953,8 +1953,16 @@
       const envelope = runEnvelopeMap.get(caseId) || null;
       const result = envelope && envelope.result ? envelope.result : resultMap.get(caseId) || null;
       const isRunning = Boolean(envelope && ["queued", "running"].includes(envelope.status));
+      const hasFailed = Boolean(envelope && envelope.status === "failed");
       const events = isRunning ? (envelope.events || []) : result ? (result.trace || []) : envelope ? (envelope.events || []) : [];
-      const activeStage = isRunning ? (envelope.active_stage || "intake") : result ? "complete" : "intake";
+      const lastEvent = events.length ? events[events.length - 1] : null;
+      // A failed run still carries the stages it did finish; keep the trace
+      // visible and point at the stage that actually died.
+      const failedStage = hasFailed ? ((lastEvent && lastEvent.stage) || (envelope && envelope.active_stage) || "intake") : null;
+      const failedIndex = hasFailed
+        ? PIPELINE_PHASES.findIndex(function(phase) { return phase.id === phaseForStage(failedStage).id; })
+        : -1;
+      const activeStage = isRunning ? (envelope.active_stage || "intake") : result ? "complete" : hasFailed ? failedStage : "intake";
       const activePhase = phaseForStage(activeStage);
       const activeIndex = PIPELINE_PHASES.findIndex(function(phase) { return phase.id === activePhase.id; });
       const classificationEvent = latestCompletedEvent(events, "classification");
@@ -1980,6 +1988,9 @@
           if (hasFinding) state = "finding";
           else if (index < activeIndex) state = "completed";
           else if (index === activeIndex) state = "running";
+        } else if (hasFailed) {
+          if (index < failedIndex) state = "completed";
+          else if (index === failedIndex) state = "failed";
         } else if (result) {
           if (phase.id === "verify" && result.evaluation && !result.evaluation.passed) state = "finding";
           else if (phase.id === "verify" && result.authority && result.authority.requires_human) state = "review";
@@ -1989,7 +2000,9 @@
           id: phase.id,
           label: phase.label,
           state: state,
-          summary: latest ? latest.summary : phase.idle,
+          summary: state === "failed"
+            ? ((envelope && envelope.error) || (latest && latest.summary) || "This stage failed")
+            : latest ? latest.summary : phase.idle,
           event: latest,
           events: phaseEvents
         };
@@ -2000,6 +2013,8 @@
         envelope: envelope,
         events: events,
         isRunning: isRunning,
+        hasFailed: hasFailed,
+        failureReason: hasFailed ? ((envelope && envelope.error) || "Pipeline run failed") : null,
         isRefreshing: isRunning && Boolean(result && result.draft),
         activeStage: activeStage,
         activePhase: activePhase,
@@ -2325,7 +2340,7 @@
       const draft = result && result.draft ? draftMarkup(result.draft.text) : "";
       conversationScroll.innerHTML = "<article class=\"message-row customer\"><div class=\"sender-label\">" + escapeHTML(item.customer) + " · Customer</div><div class=\"message\">" + escapeHTML(item.message) + attachments + "</div><div class=\"message-meta\">Fixed evaluation input</div></article>" +
         "<section class=\"response-workspace\" id=\"responseWorkspace\" data-state=\"ready\" aria-busy=\"false\"><header class=\"response-workspace-head\"><div><div class=\"sender-label\">Customer-safe response draft</div><div class=\"response-subtitle\" id=\"responseSubtitle\">Created from the current run only</div></div><div class=\"response-head-actions\"><button class=\"response-edit\" id=\"editDraftInline\" type=\"button\" hidden>Edit</button><span class=\"status-pill\" id=\"responseStatus\">Ready</span></div></header>" +
-        "<div class=\"response-frame\"><div class=\"response-layer response-ready\" id=\"responseReady\"><div class=\"response-ready-copy\"><strong>Ready to generate</strong><span>The query is fixed. The pipeline will classify it before selecting any evidence.</span>" + (live ? "<span class=\"model-badge\">ChatGPT subscription connected</span>" : "") + "</div></div>" +
+        "<div class=\"response-frame\"><div class=\"response-layer response-ready\" id=\"responseReady\"><div class=\"response-ready-copy\"><strong id=\"responseReadyTitle\">Ready to generate</strong><span id=\"responseReadyCopy\">The query is fixed. The pipeline will classify it before selecting any evidence.</span>" + (live ? "<span class=\"model-badge\">ChatGPT subscription connected</span>" : "") + "</div></div>" +
         "<div class=\"response-layer response-running\" id=\"responseRunning\"><div class=\"response-skeleton\" aria-hidden=\"true\"><span></span><span></span><span></span><span></span></div><div class=\"response-stage-copy\"><strong id=\"responseStageName\">Preparing the run</strong><span id=\"responseStageCopy\">Validating authorized context</span></div></div>" +
         "<div class=\"response-layer response-complete\" id=\"responseComplete\"><div class=\"generated-copy\" id=\"draftBody\">" + draft + "</div></div></div>" +
         "<footer class=\"response-workspace-foot\" id=\"responseMeta\">" + (result ? escapeHTML(provider) : "No response has been generated yet") + "</footer></section>";
@@ -2359,6 +2374,10 @@
         responseState = view.isRefreshing ? "refreshing" : "running";
         statusCopy = view.isRefreshing ? "Refreshing" : "Running";
         statusClass = "running";
+      } else if (view.hasFailed) {
+        responseState = "ready";
+        statusCopy = "Failed";
+        statusClass = "failed";
       } else if (result) {
         responseState = "complete";
         if (result.evaluation && !result.evaluation.passed) {
@@ -2385,7 +2404,13 @@
       setText(stageCopy, view.activePhaseState.summary);
       if (responseMeta) {
         const provider = result && result.provider && result.provider.auth === "chatgpt_subscription" ? "Generated with subscription OAuth" : "Generated at runtime";
-        setText(responseMeta, editing ? "Edits are re-verified before review" : view.isRefreshing ? "Previous verified draft remains visible while the new run completes" : result ? provider : view.isRunning ? "Evidence and decisions will appear as each stage settles" : "No response has been generated yet");
+        setText(responseMeta, editing ? "Edits are re-verified before review" : view.isRefreshing ? "Previous verified draft remains visible while the new run completes" : result ? provider : view.isRunning ? "Evidence and decisions will appear as each stage settles" : view.hasFailed ? view.failureReason : "No response has been generated yet");
+      }
+      const readyTitle = document.getElementById("responseReadyTitle");
+      const readyCopy = document.getElementById("responseReadyCopy");
+      if (readyTitle && readyCopy) {
+        setText(readyTitle, view.hasFailed ? "Run failed at " + view.activePhase.label : "Ready to generate");
+        setText(readyCopy, view.hasFailed ? view.failureReason + " No draft was produced. Generate again to retry." : "The query is fixed. The pipeline will classify it before selecting any evidence.");
       }
       if (editDraftInline) {
         editDraftInline.hidden = !result || view.isRunning;
@@ -2400,9 +2425,10 @@
         node.setAttribute("aria-current", phase.state === "running" ? "step" : "false");
         node.title = phase.summary;
       });
-      const progress = result && !view.isRunning ? 1 : view.isRunning ? view.activeIndex / Math.max(1, PIPELINE_PHASES.length - 1) : 0;
+      const progress = result && !view.isRunning ? 1 : view.isRunning || view.hasFailed ? view.activeIndex / Math.max(1, PIPELINE_PHASES.length - 1) : 0;
       runStageTrackFill.style.transform = "scaleX(" + Math.max(0, Math.min(1, progress)) + ")";
       if (view.isRunning) setText(runStageLive, view.activePhase.label + " · " + view.activePhaseState.summary);
+      else if (view.hasFailed) setText(runStageLive, view.activePhase.label + " failed · " + view.failureReason);
       else if (result && result.authority && result.authority.requires_human) setText(runStageLive, "Pipeline complete · Human review required");
       else if (result) setText(runStageLive, "Pipeline complete · Verification passed");
       else setText(runStageLive, "Ready to run");
@@ -2541,6 +2567,13 @@
 
     function phaseArtifactMarkup(phase, view) {
       if (!phase || phase.state === "pending") return "<div class=\"pipeline-detail-empty\">" + escapeHTML(phase ? phase.summary : "This stage has not started") + "</div>";
+      if (phase.state === "failed") {
+        const attempts = phase.event && phase.event.artifact ? (phase.event.artifact.attempt_errors || []) : [];
+        const trail = attempts.length > 1
+          ? "<div class=\"pipeline-artifact\">" + attempts.map(function(reason, index) { return escapeHTML("Attempt " + (index + 1) + ": " + reason); }).join("<br>") + "</div>"
+          : "";
+        return "<div class=\"pipeline-detail-failure\">" + escapeHTML(view.failureReason || phase.summary) + "</div>" + trail;
+      }
       const event = phase.event;
       let artifact = event ? artifactMarkup(event) : "";
       if (phase.id === "intake" && event && event.artifact) {
@@ -2607,7 +2640,7 @@
         if (!row) return;
         row.className = "pipeline-step " + phase.state + (phase.id === selectedPipelinePhase ? " selected" : "");
         row.setAttribute("aria-current", phase.state === "running" ? "step" : "false");
-        const labels = { pending: "Pending", running: "Running", completed: "Complete", finding: "Finding", review: "Review" };
+        const labels = { pending: "Pending", running: "Running", completed: "Complete", finding: "Finding", review: "Review", failed: "Failed" };
         setText(row.querySelector(".pipeline-step-status"), labels[phase.state] || titleCase(phase.state));
         setText(row.querySelector(".pipeline-step-copy"), phase.summary);
       });
@@ -2620,8 +2653,8 @@
       if (follow) follow.hidden = !pipelinePhasePinned || !view.isRunning;
       const overall = document.getElementById("pipelineOverall");
       if (overall) {
-        overall.className = "pipeline-overall " + (view.isRunning ? "running" : view.result && view.result.evaluation && !view.result.evaluation.passed ? "finding" : view.result && view.result.authority && view.result.authority.requires_human ? "review" : view.result ? "completed" : "ready");
-        setText(overall, view.isRunning ? view.activePhase.label : view.result && view.result.authority && view.result.authority.requires_human ? "Review" : view.result ? "Complete" : "Ready");
+        overall.className = "pipeline-overall " + (view.isRunning ? "running" : view.hasFailed ? "failed" : view.result && view.result.evaluation && !view.result.evaluation.passed ? "finding" : view.result && view.result.authority && view.result.authority.requires_human ? "review" : view.result ? "completed" : "ready");
+        setText(overall, view.isRunning ? view.activePhase.label : view.hasFailed ? "Failed" : view.result && view.result.authority && view.result.authority.requires_human ? "Review" : view.result ? "Complete" : "Ready");
       }
     }
 
@@ -2741,6 +2774,10 @@
         state = "running";
         title = view.activePhase.label + " in progress";
         copy = view.activePhaseState.summary;
+      } else if (view.hasFailed) {
+        state = "finding";
+        title = "Run failed at " + view.activePhase.label;
+        copy = view.failureReason;
       } else if (approved) {
         state = "approved";
         title = "Draft approved";

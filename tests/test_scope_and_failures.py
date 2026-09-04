@@ -1,16 +1,52 @@
 from __future__ import annotations
 
 import copy
+import time
 import unittest
 from dataclasses import replace
+from typing import Any
 
 from knowledge.retriever import load_all
 from pipeline.fixtures import load_runtime_cases
-from pipeline.orchestrator import PipelineRunner
+from pipeline.model_provider import ModelProviderError
+from pipeline.orchestrator import (
+    CLASSIFIER_RETRY_BACKOFF_SECONDS,
+    PipelineFailure,
+    PipelineRunner,
+)
 from pipeline.verifier import verify_draft
 from records.resolver import load_store
 
 from .helpers import StubProvider
+
+
+class FailingProvider(StubProvider):
+    """Fails every classification call; other purposes behave normally."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+    def generate_json(self, purpose: str, prompt: str, schema: dict[str, Any]) -> dict[str, Any]:
+        if purpose == "classification":
+            raise self.error
+        return super().generate_json(purpose, prompt, schema)
+
+
+class FlakyProvider(StubProvider):
+    """Fails only the first classification call, as a transient provider would."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+        self.classification_calls = 0
+
+    def generate_json(self, purpose: str, prompt: str, schema: dict[str, Any]) -> dict[str, Any]:
+        if purpose == "classification":
+            self.classification_calls += 1
+            if self.classification_calls == 1:
+                raise self.error
+        return super().generate_json(purpose, prompt, schema)
 
 
 class ScopeAndFailureTest(unittest.TestCase):
@@ -139,3 +175,86 @@ class ScopeAndFailureTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClassificationFailureTest(unittest.TestCase):
+    """A failed classification must stay diagnosable in the trace and the message."""
+
+    def setUp(self) -> None:
+        self.cases = load_runtime_cases()
+        self.docs = load_all()
+        self.store = load_store()
+
+    def _run(self, provider: object) -> tuple[PipelineFailure, list[dict]]:
+        events: list[dict] = []
+        runner = PipelineRunner(provider, self.docs, self.store)
+        with self.assertRaises(PipelineFailure) as caught:
+            runner.run(copy.deepcopy(self.cases[4]), on_event=events.append)
+        return caught.exception, events
+
+    def test_failure_message_carries_the_provider_reason(self) -> None:
+        exc, _ = self._run(FailingProvider(ModelProviderError("Codex request timed out after 180s")))
+        self.assertIn("classification failed after one retry", str(exc))
+        self.assertIn("Codex request timed out after 180s", str(exc))
+
+    def test_trace_records_the_failing_stage(self) -> None:
+        _, events = self._run(FailingProvider(ModelProviderError("provider unavailable")))
+        failed = [event for event in events if event["status"] == "failed"]
+        self.assertEqual([event["stage"] for event in failed], ["classification"])
+        self.assertEqual(failed[0]["artifact"]["attempt_count"], 2)
+        self.assertEqual(len(failed[0]["artifact"]["attempt_errors"]), 2)
+        # The stages that did finish stay in the trace for the UI to render.
+        self.assertIn("intake", [event["stage"] for event in events if event["status"] == "completed"])
+
+    def test_a_transient_first_attempt_still_succeeds(self) -> None:
+        provider = FlakyProvider(ModelProviderError("429 rate limited"))
+        result = PipelineRunner(provider, self.docs, self.store).run(copy.deepcopy(self.cases[4]))
+        self.assertEqual(provider.classification_calls, 2)
+        classification = [
+            event
+            for event in result["trace"]
+            if event["stage"] == "classification" and event["status"] == "completed"
+        ]
+        self.assertEqual(classification[0]["artifact"]["attempt_count"], 2)
+
+    def test_retry_backs_off_before_the_second_attempt(self) -> None:
+        provider = FailingProvider(ModelProviderError("boom"))
+        started = time.perf_counter()
+        with self.assertRaises(PipelineFailure):
+            PipelineRunner(provider, self.docs, self.store).run(copy.deepcopy(self.cases[4]))
+        self.assertGreaterEqual(time.perf_counter() - started, CLASSIFIER_RETRY_BACKOFF_SECONDS)
+
+
+class StageFailureTraceTest(unittest.TestCase):
+    """Any stage that dies must close the trace on itself, not vanish."""
+
+    def setUp(self) -> None:
+        self.cases = load_runtime_cases()
+        self.docs = load_all()
+        self.store = load_store()
+
+    def test_generation_timeout_marks_the_generation_stage(self) -> None:
+        class GenerationTimeout(StubProvider):
+            def generate_json(
+                self, purpose: str, prompt: str, schema: dict[str, Any]
+            ) -> dict[str, Any]:
+                if purpose == "response_generation":
+                    raise ModelProviderError("Codex response_generation request timed out after 180s")
+                return super().generate_json(purpose, prompt, schema)
+
+        events: list[dict] = []
+        runner = PipelineRunner(GenerationTimeout(), self.docs, self.store)
+        with self.assertRaises(ModelProviderError):
+            runner.run(copy.deepcopy(self.cases[0]), on_event=events.append)
+        self.assertEqual(events[-1]["stage"], "generation")
+        self.assertEqual(events[-1]["status"], "failed")
+        self.assertIn("timed out after 180s", events[-1]["summary"])
+
+    def test_classification_failure_is_not_reported_twice(self) -> None:
+        events: list[dict] = []
+        runner = PipelineRunner(FailingProvider(ModelProviderError("down")), self.docs, self.store)
+        with self.assertRaises(PipelineFailure):
+            runner.run(copy.deepcopy(self.cases[0]), on_event=events.append)
+        failed = [event for event in events if event["status"] == "failed"]
+        self.assertEqual(len(failed), 1)
+        self.assertEqual(failed[0]["stage"], "classification")

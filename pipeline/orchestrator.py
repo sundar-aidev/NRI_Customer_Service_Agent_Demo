@@ -24,9 +24,39 @@ from .verifier import verify_draft
 
 TraceCallback = Callable[[dict[str, Any]], None]
 
+CLASSIFIER_ATTEMPTS = 2
+CLASSIFIER_RETRY_BACKOFF_SECONDS = 1.5
+
 
 class PipelineFailure(RuntimeError):
     """Safe, user-facing pipeline failure."""
+
+
+def _failure_reason(errors: list[str]) -> str:
+    """Build an actionable classification failure message.
+
+    The provider already scrubs credentials from its errors, so the detail is
+    safe to surface. Without it the operator only learns that something failed.
+    """
+    detail = errors[-1].strip() if errors and errors[-1].strip() else "no detail reported"
+    retries = max(len(errors) - 1, 0)
+    label = "one retry" if retries == 1 else f"{retries} retries"
+    return f"classification failed after {label}: {detail}"
+
+
+def _emit_stage_failure(
+    events: list[dict[str, Any]], emit: Callable[..., None], exc: BaseException
+) -> None:
+    """Close the trace on the stage that was running when the run died.
+
+    Without this the UI sees a run that failed with no stage ever marked, and
+    renders it as if the pipeline had never started.
+    """
+    last = events[-1] if events else None
+    if last is not None and last["status"] == "failed":
+        return  # the stage already reported its own failure in detail
+    stage = last["stage"] if last is not None else "intake"
+    emit(stage, "failed", str(exc) or exc.__class__.__name__)
 
 
 class PipelineRunner:
@@ -129,6 +159,23 @@ class PipelineRunner:
             if on_event:
                 on_event(copy.deepcopy(event))
 
+        try:
+            return self._run_stages(safe_request, run_id, trace_id, started, events, emit)
+        except Exception as exc:
+            # Any stage can die on a provider timeout or outage. Close the trace
+            # on the stage that was running so the failure stays locatable.
+            _emit_stage_failure(events, emit, exc)
+            raise
+
+    def _run_stages(
+        self,
+        safe_request: dict[str, Any],
+        run_id: str,
+        trace_id: str,
+        started: float,
+        events: list[dict[str, Any]],
+        emit: Callable[..., None],
+    ) -> dict[str, Any]:
         emit(
             "intake",
             "completed",
@@ -148,15 +195,30 @@ class PipelineRunner:
 
         emit("classification", "running", "Model is decomposing the customer request")
         classification = None
-        classifier_errors = []
-        for attempt in range(2):
+        classifier_errors: list[str] = []
+        for attempt in range(CLASSIFIER_ATTEMPTS):
             try:
                 classification = classify(safe_request, self.provider)
                 break
             except (ModelProviderError, ValueError) as exc:
                 classifier_errors.append(str(exc))
-                if attempt == 1:
-                    raise PipelineFailure("classification failed after one retry") from exc
+                if attempt == CLASSIFIER_ATTEMPTS - 1:
+                    reason = _failure_reason(classifier_errors)
+                    # Record where the run died so the trace stays readable
+                    # instead of collapsing back to an untouched pipeline.
+                    emit(
+                        "classification",
+                        "failed",
+                        reason,
+                        {
+                            "attempt_count": len(classifier_errors),
+                            "attempt_errors": list(classifier_errors),
+                        },
+                    )
+                    raise PipelineFailure(reason) from exc
+                # A retry that fires instantly re-hits the same transient
+                # provider condition (rate limit, timeout, cold start).
+                time.sleep(CLASSIFIER_RETRY_BACKOFF_SECONDS)
         assert classification is not None
         emit(
             "classification",

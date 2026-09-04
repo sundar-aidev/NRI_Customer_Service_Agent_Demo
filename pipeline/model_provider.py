@@ -46,7 +46,7 @@ class CodexOAuthProvider:
             raise ModelProviderError(f"Codex executable not found: {executable}")
         self.executable = resolved
         self.model = model if model is not None else os.environ.get("NRI_CODEX_MODEL", "")
-        self.timeout_seconds = timeout_seconds or int(os.environ.get("NRI_MODEL_TIMEOUT", "180"))
+        self.timeout_seconds = timeout_seconds or int(os.environ.get("NRI_MODEL_TIMEOUT", "300"))
 
     @property
     def metadata(self) -> dict[str, Any]:

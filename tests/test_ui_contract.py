@@ -84,7 +84,21 @@ class UiContractTest(unittest.TestCase):
         runtime = template.split("function runtimeView(caseId)", 1)[1].split("function setText", 1)[
             0
         ]
-        self.assertIn('result ? "complete" : "intake"', runtime)
+        self.assertIn('result ? "complete" : hasFailed ? failedStage : "intake"', runtime)
+
+    def test_failed_runtime_keeps_its_partial_trace(self) -> None:
+        template = (ROOT / "page" / "template.html").read_text(encoding="utf-8")
+        runtime = template.split("function runtimeView(caseId)", 1)[1].split("function setText", 1)[
+            0
+        ]
+        # A failed run must not fall through to an all-pending ledger.
+        self.assertIn('envelope.status === "failed"', runtime)
+        self.assertIn('else if (hasFailed) {', runtime)
+        self.assertIn('state = "failed"', runtime)
+        self.assertIn("index < failedIndex", runtime)
+        self.assertIn('labels[phase.state] || titleCase(phase.state)', template)
+        self.assertIn('failed: "Failed"', template)
+        self.assertIn('pipeline-detail-failure', template)
 
     def test_tabsets_have_keyboard_roving_focus(self) -> None:
         template = (ROOT / "page" / "template.html").read_text(encoding="utf-8")
